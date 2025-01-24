@@ -1,0 +1,730 @@
+var _tpush=_tpush||{};_tpush.version="1.2.4";_tpush.prefix="tpush";_tpush.verbose=_tpush["verbose"]||false;var debuginfocount=0;var _data;var config={apiKey:"AIzaSyBcrR89FYbiBl_fnHAhmbWDtMowLR3qCJc",authDomain:"tpush-www.firebaseapp.com",databaseURL:"https://tpush-www.firebaseio.com",projectId:"tpush-www",storageBucket:"tpush-www.appspot.com",messagingSenderId:"618746564872",appId:"1:618746564872:web:71f886d05e4360c3f11cbd"};_tpush.parseQuery=query=>{var ret={};if(query){var a=(query[0]==="?"?query.substr(1):query).split("&");for(var i=0;i<a.length;i++){var b=a[i].split("=");ret[decodeURIComponent(b[0])]=decodeURIComponent(b[1]||"")}}return ret};_tpush.sendCommand=createRequestObject=>{if(_tpush.verbose)console.log("sendCommand");createRequestObject=createRequestObject||{};return _tpush.getUID3().then(uid=>{if(_tpush.verbose)console.log("TPUSH uid: "+uid);var ua=UAParser();createRequestObject.uid=uid;createRequestObject.timestamp=Date.now();createRequestObject.appversion=ua.browser.name+" "+ua.browser.major;createRequestObject.osversion=ua.os.name+" "+ua.os.version;createRequestObject.model=(ua.device.vendor?ua.device.vendor:"")+(ua.device.model?" "+ua.device.model:"")+(ua.device.type?" "+ua.device.type:"");createRequestObject.timezoneoffset=(new Date).getTimezoneOffset();var formData=new FormData;formData.append("data",JSON.stringify(createRequestObject));formData.append("cipher","none");formData.append("checkdate",false);return fetch("https://wstpush-mobile.terra.com/API/v1/app/"+_tpush.app,{method:"POST",mode:"cors",cache:"reload",body:formData}).then(response=>{return Promise.resolve(response.json())}).then(msg=>{if(_tpush.verbose)console.log("Request succeeded with JSON response",msg);if(msg){if("code"in msg){var code=msg.code;if("ok"==code){return Promise.resolve(msg)}}}return Promise.reject(msg)})}).catch(err=>{if(_tpush.verbose)console.log("Can not send command: "+err);return Promise.reject(err)})};_tpush.sendMetric=(data,metric)=>{if(!data)return Promise.reject("no data");var createRequestObject={command:"metric",metric:metric,appPushItem:data["pi"],index:data["ix"]};return _tpush.sendCommand(createRequestObject)};_tpush.getLocalStorageKey=()=>{return _tpush.prefix+".topic."+_tpush.app+_tpush.getUID()};_tpush.getLocalStorageKey_Profile=data=>{return _tpush.prefix+".profile."+data+"."+_tpush.app+_tpush.getUID()};_tpush.addToLocalStorage=topic=>{var items=topic.split(",");var itemsNotExistInlocalStorage=[];var exist=false;var localStorageTopicSaved=[];if(typeof JSON.parse(localStorage.getItem(_tpush.getLocalStorageKey()))=="string"){var stringAux=JSON.parse(localStorage.getItem(_tpush.getLocalStorageKey()));localStorageTopicSaved.push(stringAux)}else{localStorageTopicSaved=JSON.parse(localStorage.getItem(_tpush.getLocalStorageKey()))}if(localStorageTopicSaved==null){return 0}if(localStorageTopicSaved.length==0){localStorage.removeItem(_tpush.getLocalStorageKey());return 0}for(var i=0;i<items.length;i++){if(items[i]!=""){if(localStorageTopicSaved.indexOf(items[i])==-1){if(itemsNotExistInlocalStorage.indexOf(items[i])==-1){itemsNotExistInlocalStorage.push(items[i])}exist=true}}}if(exist){if(items.length==1){localStorageTopicSaved.push(itemsNotExistInlocalStorage[0])}else{for(var r=0;r<itemsNotExistInlocalStorage.length;r++){localStorageTopicSaved.push(itemsNotExistInlocalStorage[r])}}localStorage[_tpush.getLocalStorageKey()]=JSON.stringify(localStorageTopicSaved);return itemsNotExistInlocalStorage.join()}else{return 1}};_tpush.addToLocalStorageProfile=(data,value)=>{var result=0;var items=value;var exist=false;var localStorageTopicSaved;if(typeof JSON.parse(localStorage.getItem(_tpush.getLocalStorageKey_Profile(data)))=="string"){var stringAux=JSON.parse(localStorage.getItem(_tpush.getLocalStorageKey_Profile(data)));localStorageTopicSaved=stringAux}else{localStorage.removeItem(_tpush.getLocalStorageKey_Profile(data));result=0}if(localStorageTopicSaved==null){result=0}if(localStorageTopicSaved==""){localStorage.removeItem(_tpush.getLocalStorageKey_Profile(data));result=0}if(items!=""){if(localStorageTopicSaved!=items){localStorage[_tpush.getLocalStorageKey_Profile(data)]=JSON.stringify(items);result=0}else{result=1}}return result};_tpush.addTopic=topic=>{var resultTopics=null;if(!topic)return Promise.reject("no topic");var topics=null;if(Array.isArray(topic)){if(navigator.onLine){for(var j=0;j<topic.length;j++){topic[j]=topic[j].replace(",",".")}resultTopics=_tpush.addToLocalStorage(topic.join());if(resultTopics==0){topics=topic.join()}else if(resultTopics!=1&&resultTopics!=0){topics=resultTopics}}else return Promise.reject("No se pudo realizar la conexion a internet")}else if(typeof topic=="string"){if(navigator.onLine){topic=topic.replace(",",".");resultTopics=_tpush.addToLocalStorage(topic);if(resultTopics==0){topics=topic}else if(resultTopics!=1&&resultTopics!=0){topics=resultTopics}}else return Promise.reject("No se pudo realizar la conexion a internet")}else return Promise.reject("invalid topic type");if(resultTopics==0){localStorage[_tpush.getLocalStorageKey()]=JSON.stringify(topic)}if(resultTopics!=1){var createRequestObject={command:"subscribetotopic",topic:topics};var status;return _tpush.sendCommand(createRequestObject).then(()=>{return Promise.resolve()}).catch(err=>{_tpush.removeToLocalStorage(typeof createRequestObject.topic=="string"?createRequestObject.topic:createRequestObject.topic.join());return Promise.reject(err)})}else return Promise.resolve()};_tpush.updateProfile=(pdata,pvalue)=>{var resultTopics=null;if(!pdata)return Promise.reject("no data");if(!pvalue)return Promise.reject("no value");var topics=null;if(typeof pdata=="string"&&typeof pvalue=="string"){if(navigator.onLine){pdata=pdata.replace(",",".");pvalue=pvalue.replace(",",".");if(pdata=="msisdn"){_tpush.setValue(_tpush.prefix+".msisdn",pvalue);_tpush.setValue(_tpush.prefix+".msisdnCreationDate",Date.now())}resultTopics=_tpush.addToLocalStorageProfile(pdata,pvalue)}else return Promise.reject("No se pudo realizar la conexion a internet")}else return Promise.reject("invalid topic type");if(resultTopics!=1){var createRequestObject={command:"updateprofile",data:pdata,value:pvalue};return _tpush.sendCommand(createRequestObject).then(()=>{return Promise.resolve()}).catch(err=>{localStorage.removeItem(_tpush.getLocalStorageKey_Profile(pdata));return Promise.reject(err)})}else return Promise.resolve()};_tpush.removeToLocalStorage=topic=>{topic=topic.split(",");var localStorageTopicSaved=[];if(typeof JSON.parse(localStorage.getItem(_tpush.getLocalStorageKey()))=="string"){var stringAux=JSON.parse(localStorage.getItem(_tpush.getLocalStorageKey()));localStorageTopicSaved.push(stringAux)}else{localStorageTopicSaved=JSON.parse(localStorage.getItem(_tpush.getLocalStorageKey()))}var localStorageToRemove=[];if(localStorageTopicSaved==null){return""}var topic=topic.filter(function(elem,index,self){return index==self.indexOf(elem)});for(var i=0;i<topic.length;i++){if(topic[i]!=""){auxItems=localStorageTopicSaved.indexOf(topic[i]);if(auxItems!=-1){localStorageToRemove.push(topic[i]);localStorageTopicSaved.splice(auxItems,1)}else{return-1}}}if(localStorageTopicSaved.length!=0){localStorage[_tpush.getLocalStorageKey()]=JSON.stringify(localStorageTopicSaved)}if(localStorageTopicSaved.length==0){localStorage.removeItem(_tpush.getLocalStorageKey())}return localStorageToRemove.join()};_tpush.removeTopic=topic=>{if(!topic)return Promise.reject("no topic");var topics="";var auxItems;if(Array.isArray(topic)){if(navigator.onLine){for(var j=0;j<topic.length;j++){topic[j]=topic[j].replace(",",".")}topics=_tpush.removeToLocalStorage(topic.join())}else return Promise.reject("No se pudo realizar la conexion a internet")}else if(typeof topic=="string"){if(navigator.onLine){topic=topic.replace(",",".");topics=_tpush.removeToLocalStorage(topic);if(topics==-1){return Promise.resolve()}}else{return Promise.reject("No se pudo realizar la conexion a internet")}}else return Promise.reject("invalid topic type");var createRequestObject={command:"unsubscribefromtopic",topic:typeof topic=="string"?topic:topic.join()};var status;return _tpush.sendCommand(createRequestObject).then(status=>{return Promise.resolve()}).catch(err=>{if(createRequestObject.command=="unsubscribefromtopic"){_tpush.removeToLocalStorage(typeof createRequestObject.topic=="string"?createRequestObject.topic:createRequestObject.topic.join())}return Promise.reject(err)})};_tpush.getUID3=()=>{if(_tpush.registration){return _tpush.registration.pushManager.getSubscription().then(subscription=>{if(!subscription)return Promise.reject("Can not get subscription");var uid=null;if("subscriptionId"in subscription){uid=subscription.subscriptionId}else{uid=subscription["endpoint"]}_tpush.setValue(_tpush.prefix+".UID3Expiration",subscription.expirationTime);if(_tpush.verbose)console.log("regUID: "+uid);return _tpush.digest(uid).then(result=>{_tpush.setValue(_tpush.prefix+".UID3",result);return _tpush.getValue(_tpush.prefix+".OLDUSER").then(olduser=>{if(!olduser){_tpush.setValue(_tpush.prefix+".UID",result);_tpush.setValue(_tpush.prefix+".OLDUSER","true")}return _tpush.getValue(_tpush.prefix+".UID")})})})}else return Promise.reject(console.log("Can not get registration"))};_tpush.sendTokentoTpush=token=>{if(_tpush.verbose)console.log("sendTokentoTpush token: "+token);if(!token)return Promise.reject("no token");return _tpush.getValue(_tpush.prefix+".sent."+_tpush.app+_tpush.getUID()).then(sent=>{if(sent=="1"){return _tpush.setTokenSentToServer(token)}else{var createRequestObject={command:"register",token:token};return _tpush.sendCommand(createRequestObject).then(msg=>{if(_tpush.verbose)console.log("To Server");return _tpush.setTokenSentToServer(token)})}})};_tpush.setTokenSentToServer=token=>{return _tpush.setValue(_tpush.prefix+".sent."+_tpush.app+_tpush.getUID(),token)};_tpush.unregisterTokentoTpush=()=>{var createRequestObject={command:"unregister"};return _tpush.sendCommand(createRequestObject).then(msg=>{if(_tpush.verbose)console.log("To Server off");return _tpush.setTokenSentToServer(false)})};_tpush.buildUID=()=>{return uid=([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16))+"-"+Date.now()};_tpush.getUID=()=>{var uid;if(self["window"]&&self["window"]["localStorage"])uid=window.localStorage.getItem(_tpush.prefix+".UID");if(!uid||!uid.length){uid=_tpush.buildUID();_tpush.setValue(_tpush.prefix+".UID",uid);_tpush.setValue(_tpush.prefix+".CreationDate",Date.now());_tpush.setValue(_tpush.prefix+".OLDUSER","false")}return uid};_tpush.getFToken=()=>{var token;if(self["window"]&&self["window"]["localStorage"])token=window.localStorage.getItem(_tpush.prefix+".TOKEN");return token};_tpush.sendTokenToServer=currentToken=>{return _tpush.isTokenSentToServer(currentToken).then(sent=>{if(!sent){_tpush.setValue(_tpush.prefix+".UpdateDate",Date.now());if(_tpush.verbose)console.log("Sending token to server...");if(_tpush.verbose)console.log("Token:["+currentToken+"]");return _tpush.sendTokentoTpush(currentToken)}else{if(_tpush.verbose)console.log("Token already sent to server so won't send it again "+"unless it changes");if(_tpush.verbose)console.log("Token:["+currentToken+"]");return Promise.resolve(true)}})};_tpush.isTokenSentToServer=currentToken=>{if(!self["window"]||!self["document"])return Promise.resolve(false);if(!window["localStorage"])return Promise.resolve(false);return _tpush.getValue(_tpush.prefix+".sent."+_tpush.app+_tpush.getUID()).then(sent=>{return Promise.resolve(sent==currentToken)})};_tpush.digest=str=>{var buffer=new TextEncoder("utf-8").encode(str);return crypto.subtle.digest("SHA-256",buffer).then(function(hash){return _tpush.hex(hash)})};_tpush.hex=buffer=>{var hexCodes=[];var view=new DataView(buffer);for(var i=0;i<view.byteLength;i+=4){var value=view.getUint32(i);var stringValue=value.toString(16);var padding="00000000";var paddedValue=(padding+stringValue).slice(-padding.length);hexCodes.push(paddedValue)}var result=hexCodes.join("");return result};_tpush.tpush_ask=false;_tpush.bellClick=(valinit=0)=>{if(_tpush.tpush_ask)return false;picoModal({content:`<p onClick='_tpush.showdebuginfo()' style='margin-bottom:4em;' class='tpush_dialog'>`+_tpush["label.ask"]+`</p>
+		<div class="tpushwebdebuginfo" style = "display:none; height: 450px;">
+			<p style='margin-top:1em;' class='tpush_dialog'>
+			uid: `+_tpush.getUID()+`
+			</p>
+			<p style='margin-top:1em;' class='tpush_dialog'>
+			uid3: `+window.localStorage.getItem(_tpush.prefix+".UID3")+`
+			</p>
+			<p style='margin-top:1em;' class='tpush_dialog'>
+			uid3 expiration: `+window.localStorage.getItem(_tpush.prefix+".UID3Expiration")+`
+			</p>
+			<p style='margin-top:1em;' class='tpush_dialog'>
+			token: `+_tpush.getFToken()+`
+			</p>
+			<p style='margin-top:1em;' class='tpush_dialog'>
+			creation date: `+window.localStorage.getItem(_tpush.prefix+".CreationDate")+`
+			</p>
+			<p style='margin-top:1em;' class='tpush_dialog'>
+			update date: `+window.localStorage.getItem(_tpush.prefix+".UpdateDate")+`		
+			</p>
+			<p style='margin-top:1em;' class='tpush_dialog'>
+			refrestoken date: `+window.localStorage.getItem(_tpush.prefix+".refreshtokendate")+`
+			</p>
+			<p style='margin-top:1em;' class='tpush_dialog'>
+			msisdn: `+window.localStorage.getItem(_tpush.prefix+".msisdn")+`
+			</p>
+			<p style='margin-top:1em;' class='tpush_dialog'>
+			msisdn date: `+window.localStorage.getItem(_tpush.prefix+".msisdnCreationDate")+`
+			</p>
+			<p style='margin-top:1em;' class='tpush_dialog'>
+			rememberOptin date: `+window.localStorage.getItem(_tpush.prefix+".notif.rememberOptin")+`
+			</p>
+
+		</div>
+			<p class='footer tpush_dialog' style='position: absolute;bottom: 0;background: `+_tpush["dialog.footer.color.background"]+` ; width: 100%;left: 0;padding: 10px;box-sizing: border-box;margin: 0;text-align: right;'>
+			<button class='cancel tpush_btn'>`+_tpush["label.no"]+`</button> 
+			<button class='ok tpush_btn tpush_btn_positive' autofocus>`+_tpush["label.yes"]+`</button>
+			</p>`,width:"19em"}).afterCreate(modal=>{modal.modalElem().addEventListener("click",evt=>{if(evt.target&&evt.target.matches(".ok")){modal.close(true);_tpush.requestPermission().then(()=>{_tpush.setValue(_tpush.prefix+".notif.enabled","on")}).then(()=>{if(_tpush["ready"]&&typeof _tpush["ready"]=="function"){try{_tpush["ready"]()}catch(err){console.log(err)}}return Promise.resolve()})}else if(evt.target&&evt.target.matches(".cancel")){modal.close();_tpush.setValue(_tpush.prefix+".notif.rememberOptin",Date.now());if(valinit==1){_tpush.setValue(_tpush.prefix+".notif.enabled","off")}else{_tpush.deleteToken().then(()=>{_tpush.setValue(_tpush.prefix+".notif.enabled","off")})}}});_tpush.tpush_ask=true}).afterClose((modal,event)=>{_tpush.tpush_ask=false}).show();return false};_tpush.bellClickStyle2=(valinit=0)=>{if(_tpush.tpush_ask)return false;_tpush.tpush_ask=true;_tpush.requestPermission().then(()=>{_tpush.setValue(_tpush.prefix+".notif.enabled","on")}).then(()=>{if(_tpush["ready"]&&typeof _tpush["ready"]=="function"){try{_tpush["ready"]()}catch(err){console.log(err)}}return Promise.resolve()});_tpush.tpush_ask=false;return false};_tpush.resetUI=()=>{return _tpush.isTokenSentToServer()};_tpush.whenReady=f=>{return _tpush["ready"]=f};_tpush.enableNotif=()=>{_tpush.loading(true);if(_tpush.verbose)console.log("loading...");return _tpush.messaging.getToken().then(function(currentToken){if(currentToken){if(_tpush.verbose)console.log("Token: "+currentToken);_tpush.setValue(_tpush.prefix+".TOKEN",currentToken);return _tpush.sendTokenToServer(currentToken).then(()=>{if(self["document"])_tpush.enableNotifChangeStyle();return Promise.resolve()})}else{if(_tpush.verbose)console.log("No Instance ID token available. Request permission to generate one.");if(self["document"])document.querySelector("#tpush-bell").style.background="#aaa";return _tpush.setTokenSentToServer(false)}}).catch(function(err){if(_tpush.verbose)console.log("An error occurred while retrieving token. ",err);_tpush.setTokenSentToServer(false);_tpush.loading(false);return Promise.reject("An error occurred while retrieving token")})};_tpush.requestPermission=()=>{if(_tpush.verbose)console.log("Requesting permission...");_tpush.loading(true);return _tpush.messaging.requestPermission().then(function(){if(_tpush.verbose)console.log("Notification permission granted.");return _tpush.enableNotif()}).then(()=>{_tpush.loading(false);return Promise.resolve()}).catch(function(err){if(_tpush.verbose)console.log("Unable to get permission to notify.",err);_tpush.loading(false);switch(err.code){case"messaging/permission-blocked":console.log("messaging/permission-blocked");_tpush.disableNotifChangeFunction();break}return Promise.reject("Unable to get permission to notify")})};_tpush.deleteToken=()=>{if(!("Notification"in window)){if(_tpush.verbose)console.log("This browser does not support system notifications");return Promise.reject("This browser does not support system notifications")}if(Notification.permission==="granted"){_tpush.loading(true);return _tpush.messaging.getToken().then(currentToken=>{return _tpush.unregisterTokentoTpush()}).then(()=>{if(self["document"])document.querySelector("#tpush-bell").style.background="#aaa";_tpush.loading(false);return Promise.resolve()}).catch(err=>{if(_tpush.verbose)console.log("Error retrieving Instance ID token. ",err);_tpush.loading(false);return Promise.reject("Error retrieving Instance ID token")})}else{return Promise.reject("No permissions for notifications")}};_tpush.showdebuginfo=()=>{debuginfocount++;if(debuginfocount>3){var x=document.getElementsByClassName("tpushwebdebuginfo");var i;for(i=0;i<x.length;i++){x[i].style.display="inline-block"}var picomodal=document.getElementsByClassName("pico-content");for(i=0;i<picomodal.length;i++){picomodal[i].style.width="20em"}}};_tpush.addStyle=strStyle=>{if(!self["document"])return;var head=document.head||document.getElementsByTagName("head")[0];var style=document.createElement("style");style.type="text/css";if(style.styleSheet){style.styleSheet.cssText=strStyle}else{style.appendChild(document.createTextNode(strStyle))}head.appendChild(style)};_tpush.createLoading=()=>{if(!self["document"])return;_tpush.divloading=document.createElement("div");_tpush.divloading.id="tpush_bowlG";_tpush.divloading.innerHTML=`
+	<div id="tpush_bowl_ringG">
+		<div class="tpush_ball_holderG">
+			<div class="tpush_ballG">
+			</div>
+		</div>
+	</div>`;document.body.appendChild(_tpush.divloading)};_tpush.createBell=()=>{_tpush.bell=document.createElement("div");_tpush.bell.id="tpush-bell";const defaultContent=`
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 40 40" style="fill: `+_tpush["color.background"]+`;" xml:space="preserve" id="tpush-bell-in"><g id="Layer_3"> <g> <path class="st0" d="M28,21.7c0-2.5-1.1-5.4-3.1-7.6c-1.9-2.1-3.4-1.9-3.4-3.6C21.5,9.7,20.8,9,20,9s-1.5,0.7-1.5,1.5c0,1.6-1.6,1.4-3.4,3.6c-2,2.2-3.1,5.1-3.1,7.6c0,2.7-2,2.5-2,4.3c0,2.5,3.9,4,10,4s10-1.5,10-4C30,24.2,28,24.4,28,21.7z"></path> <path class="st0" d="M22.5,30.9C21.6,31,21,31,20,31s-1.6,0-2.5-0.1c-0.1,0-0.2,0.1-0.2,0.2S18,33,20,33s2.8-1.7,2.8-1.9S22.6,30.9,22.5,30.9z"></path> </g> </g> <g id="Circles" class="st1"> <g class="st2"> <circle class="st3 stcolor" cx="20" cy="30" r="3"></circle> </g> <circle class="st4 stcolor" cx="28" cy="26" r="2"></circle> <circle class="st4 stcolor" cx="12" cy="26" r="2"></circle> <circle class="st4 stcolor" cx="20" cy="10.5" r="1.5"></circle> <circle class="st4 stcolor" cx="20" cy="19" r="7"></circle> <circle class="st4 stcolor" cx="17.5" cy="31.1" r="0.2"></circle> <circle class="st4 stcolor" cx="22.5" cy="31.1" r="0.3"></circle> </g> </svg> <p id="bubble-count" class="" style="display:none;border-color: `+_tpush["color.normal"]+`; background: `+_tpush["color.highlight"]+`; color: `+_tpush["color.background"]+`; line-height: 15px;position: absolute;    font-size: 9px;    z-index: 4;    right: 18%;    top: 0%;    font-weight: 600;    border-radius: 50%;    border: 2px solid `+_tpush["color.highlight"]+`;    height: 35%;    width: 35%;    text-align: center;   margin-top: 7px;"></p>
+	`;const style2Content=`
+	<div id="tpush-bell-disable" style="display: none;">
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 40 40" style="fill: #333;" xml:space="preserve" id="tpush-bell-in"><g id="Layer_3"> <g> <path class="st0" d="M28,21.7c0-2.5-1.1-5.4-3.1-7.6c-1.9-2.1-3.4-1.9-3.4-3.6C21.5,9.7,20.8,9,20,9s-1.5,0.7-1.5,1.5c0,1.6-1.6,1.4-3.4,3.6c-2,2.2-3.1,5.1-3.1,7.6c0,2.7-2,2.5-2,4.3c0,2.5,3.9,4,10,4s10-1.5,10-4C30,24.2,28,24.4,28,21.7z"></path> <path class="st0" d="M22.5,30.9C21.6,31,21,31,20,31s-1.6,0-2.5-0.1c-0.1,0-0.2,0.1-0.2,0.2S18,33,20,33s2.8-1.7,2.8-1.9S22.6,30.9,22.5,30.9z"></path> </g> </g> <g id="Circles" class="st1"> <g class="st2"> <circle class="st3 stcolor" cx="20" cy="30" r="3"></circle> </g> <circle class="st4 stcolor" cx="28" cy="26" r="2"></circle> <circle class="st4 stcolor" cx="12" cy="26" r="2"></circle> <circle class="st4 stcolor" cx="20" cy="10.5" r="1.5"></circle> <circle class="st4 stcolor" cx="20" cy="19" r="7"></circle> <circle class="st4 stcolor" cx="17.5" cy="31.1" r="0.2"></circle> <circle class="st4 stcolor" cx="22.5" cy="31.1" r="0.3"></circle> </g> </svg><p id="bubble-count" class="" style="display:none;border-color: `+_tpush["color.normal"]+`; background: `+_tpush["color.highlight"]+`; color: `+_tpush["color.background"]+`; line-height: 15px;position: absolute;    font-size: 9px;    z-index: 4;    right: 18%;    top: 0%;    font-weight: 600;    border-radius: 50%;    border: 2px solid `+_tpush["color.highlight"]+`;    height: 35%;    width: 35%;    text-align: center;   margin-top: 7px;"></p>
+	</div>
+
+	<div style="width: 50px; height: 0px;" id="tpush-banner-animation">
+		<div class="notificaciones-box animar-div"  title="Activar notificaciones">
+  			<div class="notificacion  flex-container" style="background: `+_tpush["color.background"]+`">
+    			<div>
+      				<div class="amp-push-widget-bell">
+        				<svg viewBox="0 0 40 40" id="tpushbell" fill="`+_tpush["color.normal"]+`">
+        					<g>
+								<g> 
+									<path class="st0" d="M28,21.7c0-2.5-1.1-5.4-3.1-7.6c-1.9-2.1-3.4-1.9-3.4-3.6C21.5,9.7,20.8,9,20,9s-1.5,0.7-1.5,1.5c0,1.6-1.6,1.4-3.4,3.6c-2,2.2-3.1,5.1-3.1,7.6c0,2.7-2,2.5-2,4.3c0,2.5,3.9,4,10,4s10-1.5,10-4C30,24.2,28,24.4,28,21.7z"></path> 
+									<path class="st0" d="M22.5,30.9C21.6,31,21,31,20,31s-1.6,0-2.5-0.1c-0.1,0-0.2,0.1-0.2,0.2S18,33,20,33s2.8-1.7,2.8-1.9S22.6,30.9,22.5,30.9z"></path>
+								</g>
+        					</g>
+				         	<g>
+          						<g> 
+				                	<circle cx="20" cy="30" r="3"></circle>
+			              		</g>
+								<circle cx="28" cy="26" r="2"></circle> 
+								<circle cx="12" cy="26" r="2"></circle> 
+								<circle cx="20" cy="10.5" r="1.5"></circle>
+								<circle cx="20" cy="19" r="7"></circle> 
+								<circle cx="17.5" cy="31.1" r="0.2"></circle> 
+								<circle cx="22.5" cy="31.1" r="0.3"></circle>
+		              		</g> 
+						</svg>
+      				</div>
+    			</div>
+    			<div class="txt" style="color: `+_tpush["color.normal"]+`">Activar </br> Notificaciones</div>
+  			</div>    
+		</div>
+	</div>
+
+`;const style2DisablePopUp=`
+	<div class="d-none" id="disablePopUpCenter">
+        <div id="centered-div">
+			<div id="disablePopUpCrossExit">
+				<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: 100%;">
+					<line x1="10" y1="10" x2="90" y2="90" stroke="gray" stroke-width="10"/>
+					<line x1="90" y1="10" x2="10" y2="90" stroke="gray" stroke-width="10"/>
+				</svg>
+				</div>
+		
+            <iframe id="disablePopUpIframe" src=""></iframe>
+        </div>
+    </div>
+	`;if(_tpush.style==="default"){_tpush.bell.innerHTML=defaultContent;_tpush.bell.addEventListener("click",_tpush.bellClick)}else if(_tpush.style==="style2"){_tpush.bell.innerHTML=style2Content;var child=document.createElement("div");child.innerHTML=style2DisablePopUp;document.body.appendChild(child);_tpush.bell.addEventListener("click",_tpush.bellClickStyle2)}document.body.appendChild(_tpush.bell)};_tpush.loadScript=path=>{return new Promise((resolve,reject)=>{if(!self["window"]||!self["document"])reject();var script=document.createElement("script");var prior=document.getElementsByTagName("script")[0];script.async=1;script.onload=script.onreadystatechange=function(_,isAbort){if(isAbort||!script.readyState||/loaded|complete/.test(script.readyState)){script.onload=script.onreadystatechange=null;script=undefined;if(!isAbort){resolve()}else{reject("abort")}}};script.src=path;prior.parentNode.insertBefore(script,prior)})};_tpush.loading=show=>{if(_tpush["divloading"])_tpush.divloading.style.display=show?"block":"none";if(_tpush["bell"])_tpush.bell.style.display=show?"none":"block"};_tpush.getValue=name=>{if(self["window"]&&window["localStorage"])return Promise.resolve(window.localStorage.getItem(name));else return Promise.reject()};_tpush.setValue=(name,value)=>{if(self["window"]&&window["localStorage"])window.localStorage.setItem(name,value);return Promise.resolve(value)};_tpush.init=()=>{_tpush.createLoading();if("serviceWorker"in navigator&&"Notification"in window){return _tpush.loadScript("https://www.gstatic.com/firebasejs/7.19.1/firebase-app.js").then(()=>{return _tpush.loadScript("https://www.gstatic.com/firebasejs/7.19.1/firebase-messaging.js")}).then(()=>{if(_tpush.verbose)console.log("Init Firebase");firebase.initializeApp(config);_tpush.messaging=firebase.messaging();return navigator.serviceWorker.register(_tpush["swpath"]+"tpush-sw.js?app="+encodeURIComponent(_tpush.app)).then(registration=>{if(_tpush.verbose)console.log("Service Worker registration");console.dir(registration);_tpush.attachEvents();_tpush.createBell();_tpush.messaging.useServiceWorker(registration);_tpush.registration=registration;_tpush.resetUI();_tpush.loading(false);if(_tpush.verbose)console.log("Loading false");return Promise.resolve(registration)}).then(()=>{_tpush.getValue(_tpush.prefix+".notif.enabled").then(notif=>{if(_tpush.softOptin){switch(notif){case"on":_tpush.requestPermission().then(()=>{if(_tpush["ready"]&&typeof _tpush["ready"]=="function"){try{_tpush["ready"]()}catch(err){console.log(err)}}return Promise.resolve()});break;case"off":_tpush.getValue(_tpush.prefix+".notif.rememberOptin").then(date=>{if(date!=null){let rememberdate=new Date(date*1);if(_tpush.verbose)console.log("RememberOptin date",rememberdate);if(_tpush.rememberOptin==null||_tpush.rememberOptin==undefined||_tpush.rememberOptin==0)_tpush.rememberOptin=10080;let diff=(new Date).getTime()-rememberdate.getTime();let minutesdiff=Math.round(diff/1e3/60);if(_tpush.verbose)console.log("Total minutes",minutesdiff,"minutes to remember",_tpush.rememberOptin);if(minutesdiff>=_tpush.rememberOptin){if(Notification.permission=="default"||Notification.permission=="granted"){_tpush.bellClick(1)}}}else _tpush.setValue(_tpush.prefix+".notif.rememberOptin",Date.now())});break;case null:_tpush.getValue(_tpush.prefix+".TOKEN").then(token=>{if(!token&&Notification.permission=="default"){_tpush.bellClick(1)}else{_tpush.requestPermission().then(()=>{_tpush.setValue(_tpush.prefix+".notif.enabled","on")}).then(()=>{if(_tpush["ready"]&&typeof _tpush["ready"]=="function"){try{_tpush["ready"]()}catch(err){console.log(err)}}return Promise.resolve()})}});break}}else{if(!notif||notif=="on"||notif==null){return _tpush.requestPermission().then(()=>{if(_tpush["topics"])return _tpush.addTopic(_tpush["topics"]);else return Promise.resolve()})}else return Promise.resolve()}})}).then(()=>{if(_tpush["ready"]&&typeof _tpush["ready"]=="function"){try{_tpush["ready"]()}catch(err){console.log(err)}}return Promise.resolve()}).catch(error=>{console.error(error)})}).then(()=>{_tpush.getUID3().then(uid=>{if(uid&&uid.length){var element=document.getElementById("tpwuiddiv");url=location.href;if(element==null&&url.includes("tpwuiddiv")){var newDiv=document.createElement("div");newDiv.setAttribute("id","tpwuiddiv");newDiv.setAttribute("style","margin:1em;font-size: 16px;    padding-top: 25px;");var newp=document.createElement("p");var newContent=document.createTextNode(uid);newp.appendChild(newContent);var tpushwebdebuginfo=document.createElement("div");const webInfo=`
+								<div class="tpushwebdebuginfo">
+								<p style='margin:1em;'>
+								uid: `+_tpush.getUID()+`
+								</p>
+								<p style='margin:1em;'>
+								uid3: `+window.localStorage.getItem(_tpush.prefix+".UID3")+`
+								</p>
+								<p style='margin:1em;' class='tpush_dialog'>
+								uid3 expiration: `+window.localStorage.getItem(_tpush.prefix+".UID3Expiration")+`
+								</p>
+								<p style='margin:1em;' class='tpush_dialog'>
+								token: `+_tpush.getFToken()+`
+								</p>
+								<p style='margin:1em;' class='tpush_dialog'>
+								creation date: `+window.localStorage.getItem(_tpush.prefix+".CreationDate")+`
+								</p>
+								<p style='margin:1em;' class='tpush_dialog'>
+								update date: `+window.localStorage.getItem(_tpush.prefix+".UpdateDate")+`		
+								</p>
+								<p style='margin:1em;' class='tpush_dialog'>
+								refrestoken date: `+window.localStorage.getItem(_tpush.prefix+".refreshtokendate")+`
+								</p>
+								<p style='margin:1em;' class='tpush_dialog'>
+								msisdn: `+window.localStorage.getItem(_tpush.prefix+".msisdn")+`
+								</p>
+								<p style='margin:1em;' class='tpush_dialog'>
+								msisdn date: `+window.localStorage.getItem(_tpush.prefix+".msisdnCreationDate")+`
+								</p>
+								<p style='margin:1em;' class='tpush_dialog'>
+								rememberOptin date: `+window.localStorage.getItem(_tpush.prefix+".notif.rememberOptin")+`
+								</p>
+
+							</div>
+							`;tpushwebdebuginfo.innerHTML=webInfo;newDiv.appendChild(newp);newDiv.appendChild(tpushwebdebuginfo);var body=document.body;body.insertBefore(newDiv,body.firstChild)}}})}).catch(err=>{console.error("Can not load firebase script: "+err)})}else _tpush.loading(false)};_tpush.attachStyles=()=>{const styleDefault=`
+	.tpush_dialog {
+	font-family: `+_tpush["label.ask.font"]+`;
+	font-size: 12pt;
+	text-decoration: none;
+	color: `+_tpush["label.ask.color"]+`;
+	}
+
+.tpush_btn {
+  -webkit-border-radius: 0.5em;
+  -moz-border-radius: 0.5em;
+  border-radius: 0.5em;
+  color: `+_tpush["label.no.color"]+`;
+  background: `+_tpush["button.no.color.background"]+`;
+  padding: 0.5em 1em 0.5em 1em;
+  font-family: Arial;
+  font-size: 12pt;
+  text-decoration: none;
+  border:none;
+  cursor:pointer;
+  margin-left:0.5em;
+}
+
+.tpush_btn:focus {outline:0;}
+
+.tpush_btn:hover {
+  text-decoration: none;
+}
+
+.tpush_btn_positive {
+	background: `+_tpush["color.highlight"]+`;
+	color: `+_tpush["label.yes.color"]+`;
+}
+
+.stcolor {} .stcolor2{} .st1 { display:none;} .st2 { display:inline;} .st3 { fill: none;stroke-width:5.000000e-02;stroke-miterlimit:10;stroke-dasharray:0.1001,0.1001;} .st4 { display:inline;fill:none;stroke-width:5.000000e-02;stroke-miterlimit:10;stroke-dasharray:0.1;}
+	
+
+#tpush-bell {
+position: fixed; `+_tpush["icon.align.horizontal"]+`: `+_tpush["icon.margin.horizontal"]+`; `+_tpush["icon.align.vertical"]+`: `+_tpush["icon.margin.vertical"]+`;border-radius: 50%; cursor: pointer;display: block; width: 3em; height: 3em; z-index: 9999999; background: #aaa;
+}	
+
+#tpush_bowlG{
+	position:relative;
+	width:3em;
+	height:3em;
+	margin:auto;
+	position: fixed;
+	`+_tpush["icon.align.horizontal"]+`: `+_tpush["icon.margin.horizontal"]+`;
+	`+_tpush["icon.align.vertical"]+`: `+_tpush["icon.margin.vertical"]+`;
+	display: block;
+	z-index: 9999999;
+}
+
+#tpush_bowl_ringG{
+	position:absolute;
+	width:3em;
+	height:3em;
+	border:3px solid `+_tpush["color.normal"]+`;
+	border-radius:3em;
+	-webkit-border-radius:3em;
+}
+
+.tpush_ball_holderG{
+	position:absolute;
+	width:1em;
+	height:3em;
+	left:0.9em;
+	top:-0.2em;
+	animation-name:tpush_ball_moveG;
+		-webkit-animation-name:tpush_ball_moveG;
+	animation-duration:1.105s;
+		-webkit-animation-duration:1.105s;
+	animation-iteration-count:infinite;
+		-webkit-animation-iteration-count:infinite;
+	animation-timing-function:linear;
+		-webkit-animation-timing-function:linear;
+}
+
+.tpush_ballG{
+	position:absolute;
+	left:0.5em;
+	top:-0.5em;
+	width:1.0em;
+	height:1.0em;
+	background:`+_tpush["color.highlight"]+`;
+	border-radius:0.5em;
+	-webkit-border-radius:0.5em;
+}
+
+
+
+@keyframes tpush_ball_moveG{
+	0%{
+		transform:rotate(0deg)
+	}
+
+	100%{
+		transform:rotate(360deg)
+	}
+}
+
+@-webkit-keyframes tpush_ball_moveG{
+	0%{
+		-webkit-transform:rotate(0deg)
+	}
+
+	100%{
+		-webkit-transform:rotate(360deg)
+	}
+}
+	button.cancel.tpush_btn {
+    background-color: `+_tpush["button.no.color.background"]+`;
+    text-transform: inherit;
+    height: 41px;
+    width: fit-content;
+	line-height: 0px;
+	font-family: `+_tpush["label.no.font"]+`;
+}
+
+button.ok.tpush_btn.tpush_btn_positive {
+    text-transform: inherit;
+    height: 41px;
+    width: fit-content;
+	line-height: 0px;
+	font-family: `+_tpush["label.yes.font"]+`;
+}
+.tpush_btn:hover {
+    background:`+_tpush["button.yes.color.hover"]+`;
+}
+button.cancel.tpush_btn:hover{
+	background:`+_tpush["button.no.color.hover"]+`;
+}
+.pico-content {
+	background-color: `+_tpush["dialog.header.color.background"]+` !important;
+}
+	
+`;const style2=`
+.amp-push-widget-unsuscribe {
+    padding-right: 10px;
+    padding-left: 10px;
+    background-color: rgba(0, 119, 126, .89);
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+}
+
+.amp-push-widget-bell {
+    width: 50px;
+    display: flex;
+    align-items: center;
+	-webkit-animation: ring 8s .7s ease-in-out infinite;
+	-webkit-transform-origin: 50% 4px;
+	-moz-animation: ring 84s .7s ease-in-out infinite;
+	-moz-transform-origin: 50% 4px;
+	animation: ring 8s .7s ease-in-out infinite;
+	transform-origin: 50% 4px;
+}
+
+.fillbell {
+    fill: red;
+}
+	@-webkit-keyframes ring {
+    0% {
+        -webkit-transform: rotateZ(0);
+    }
+
+    1% {
+        -webkit-transform: rotateZ(30deg);
+    }
+
+    3% {
+        -webkit-transform: rotateZ(-28deg);
+    }
+
+    5% {
+        -webkit-transform: rotateZ(34deg);
+    }
+
+    7% {
+        -webkit-transform: rotateZ(-32deg);
+    }
+
+    9% {
+        -webkit-transform: rotateZ(30deg);
+    }
+
+    11% {
+        -webkit-transform: rotateZ(-28deg);
+    }
+
+    13% {
+        -webkit-transform: rotateZ(26deg);
+    }
+
+    15% {
+        -webkit-transform: rotateZ(-24deg);
+    }
+
+    17% {
+        -webkit-transform: rotateZ(22deg);
+    }
+
+    19% {
+        -webkit-transform: rotateZ(-20deg);
+    }
+
+    21% {
+        -webkit-transform: rotateZ(18deg);
+    }
+
+    23% {
+        -webkit-transform: rotateZ(-16deg);
+    }
+
+    25% {
+        -webkit-transform: rotateZ(14deg);
+    }
+
+    27% {
+        -webkit-transform: rotateZ(-12deg);
+    }
+
+    29% {
+        -webkit-transform: rotateZ(10deg);
+    }
+
+    31% {
+        -webkit-transform: rotateZ(-8deg);
+    }
+
+    33% {
+        -webkit-transform: rotateZ(6deg);
+    }
+
+    35% {
+        -webkit-transform: rotateZ(-4deg);
+    }
+
+    37% {
+        -webkit-transform: rotateZ(2deg);
+    }
+
+    39% {
+        -webkit-transform: rotateZ(-1deg);
+    }
+
+    41% {
+        -webkit-transform: rotateZ(1deg);
+    }
+
+    43% {
+        -webkit-transform: rotateZ(0);
+    }
+
+    100% {
+        -webkit-transform: rotateZ(0);
+    }
+}
+
+@-moz-keyframes ring {
+    0% {
+        -moz-transform: rotate(0);
+    }
+
+    1% {
+        -moz-transform: rotate(30deg);
+    }
+
+    3% {
+        -moz-transform: rotate(-28deg);
+    }
+
+    5% {
+        -moz-transform: rotate(34deg);
+    }
+
+    7% {
+        -moz-transform: rotate(-32deg);
+    }
+
+    9% {
+        -moz-transform: rotate(30deg);
+    }
+
+    11% {
+        -moz-transform: rotate(-28deg);
+    }
+
+    13% {
+        -moz-transform: rotate(26deg);
+    }
+
+    15% {
+        -moz-transform: rotate(-24deg);
+    }
+
+    17% {
+        -moz-transform: rotate(22deg);
+    }
+
+    19% {
+        -moz-transform: rotate(-20deg);
+    }
+
+    21% {
+        -moz-transform: rotate(18deg);
+    }
+
+    23% {
+        -moz-transform: rotate(-16deg);
+    }
+
+    25% {
+        -moz-transform: rotate(14deg);
+    }
+
+    27% {
+        -moz-transform: rotate(-12deg);
+    }
+
+    29% {
+        -moz-transform: rotate(10deg);
+    }
+
+    31% {
+        -moz-transform: rotate(-8deg);
+    }
+
+    33% {
+        -moz-transform: rotate(6deg);
+    }
+
+    35% {
+        -moz-transform: rotate(-4deg);
+    }
+
+    37% {
+        -moz-transform: rotate(2deg);
+    }
+
+    39% {
+        -moz-transform: rotate(-1deg);
+    }
+
+    41% {
+        -moz-transform: rotate(1deg);
+    }
+
+    43% {
+        -moz-transform: rotate(0);
+    }
+
+    100% {
+        -moz-transform: rotate(0);
+    }
+}
+
+@keyframes ring {
+    0% {
+        transform: rotate(0);
+    }
+
+    1% {
+        transform: rotate(30deg);
+    }
+
+    3% {
+        transform: rotate(-28deg);
+    }
+
+    5% {
+        transform: rotate(34deg);
+    }
+
+    7% {
+        transform: rotate(-32deg);
+    }
+
+    9% {
+        transform: rotate(30deg);
+    }
+
+    11% {
+        transform: rotate(-28deg);
+    }
+
+    13% {
+        transform: rotate(26deg);
+    }
+
+    15% {
+        transform: rotate(-24deg);
+    }
+
+    17% {
+        transform: rotate(22deg);
+    }
+
+    19% {
+        transform: rotate(-20deg);
+    }
+
+    21% {
+        transform: rotate(18deg);
+    }
+
+    23% {
+        transform: rotate(-16deg);
+    }
+
+    25% {
+        transform: rotate(14deg);
+    }
+
+    27% {
+        transform: rotate(-12deg);
+    }
+
+    29% {
+        transform: rotate(10deg);
+    }
+
+    31% {
+        transform: rotate(-8deg);
+    }
+
+    33% {
+        transform: rotate(6deg);
+    }
+
+    35% {
+        transform: rotate(-4deg);
+    }
+
+    37% {
+        transform: rotate(2deg);
+    }
+
+    39% {
+        transform: rotate(-1deg);
+    }
+
+    41% {
+        transform: rotate(1deg);
+    }
+
+    43% {
+        transform: rotate(0);
+    }
+
+    100% {
+        transform: rotate(0);
+    }
+}
+
+.flex-container {
+    display: flex;
+    text-align: center;
+    align-items: center;
+    transform: translateX(180px);
+    transition: transform 0.5s ease-in-out;
+    animation: move 10s ease-in-out 0s 1;
+}
+
+    .flex-container:hover {
+        transform: translateX(0px);
+    }
+
+    .flex-container > div {
+        /* margin: 10px; */
+    }
+
+.notificacion {
+    font-size: 20px;
+    width: 250px;
+    border-radius: 10px 0px 0px 10px;
+     /*color: white;*/
+    padding: 10px;
+    /* background: #3AC251;*/
+    flex: auto;
+    font-weight: bold;
+    font-family: 'Franklin Gothic Medium', 'Arial Narrow';
+}
+
+.txt {
+    width: 200px;
+}
+
+@keyframes move {
+    0% {
+        transform: translateX(180px);
+    }
+
+    10% {
+        transform: translateX(0px);
+    }
+
+    90% {
+        transform: translateX(0px);
+    }
+
+    100% {
+        transform: translateX(180px);
+    }
+}
+
+.notificaciones-box {
+    z-index: 5;
+    position: fixed;
+    bottom: 20px;
+    right: 0px;
+    overflow: hidden;
+	cursor:pointer;
+}
+
+#tpush-bell-disable {
+position: fixed;
+    right: 0.91em;
+    bottom: 0.91em;
+    border-radius: 50%;
+    cursor: pointer;
+    display: block;
+    width: 3em;
+    height: 3em;
+    z-index: 9999999;
+    background: #aaa;
+}
+
+.d-none {
+	display: none !important;
+}
+
+#disablePopUpCenter {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background-color: rgba(0, 0, 0, 0.7);
+	z-index: 100;
+	justify-content: center;
+	align-items: center;
+	display:flex;
+}
+/* Estilo del div centrado */
+#centered-div {
+	background-color: white;
+	padding: 20px;
+	border-radius: 10px;
+	box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+	width: 86vw;
+	height: 86vh;
+	max-width: 600px;
+	overflow: auto;
+	position: absolute;
+}
+
+#disablePopUpIframe {
+	width: 100%;
+    border: 0;
+    height: 100%;
+}
+
+
+#disablePopUpCrossExit {
+	width: 25px; 
+	height: 25px;
+	position:absolute;
+	right: 10px;
+	top: 10px;
+}
+
+.popup-show {
+	animation: popupAnimation 0.3s forwards ease-in-out;
+}
+.popup-hide {
+		animation: popupClose 0.3s forwards ease-in-out;
+	}
+
+/* Definición de la animación */
+@keyframes popupAnimation {
+	0% {
+		transform: scale(0);
+		opacity: 0;
+	}
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+	 @keyframes popupClose {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(0);
+                opacity: 0;
+            }
+        }
+	
+`;if(_tpush.style==="default"){_tpush.addStyle(styleDefault)}else if(_tpush.style==="style2"){_tpush.addStyle(style2)}};_tpush.attachEvents=()=>{if(!self["window"])return;_tpush.messaging=firebase.messaging();_tpush.messaging.onTokenRefresh(function(){_tpush.messaging.getToken().then(function(refreshedToken){if(_tpush.verbose)console.log("Token refreshed.");_tpush.setValue(_tpush.prefix+".refreshtokendate",refreshedToken);_tpush.setTokenSentToServer(false);_tpush.sendTokenToServer(refreshedToken)}).catch(function(err){if(_tpush.verbose)console.log("Unable to retrieve refreshed token ",err)})});_tpush.messaging.onMessage(function(payload){if(_tpush.verbose)console.log("Message received. ",payload);if(!payload["notification"])return;_tpush.sendMetric(payload.data,"receive");const notificationTitle=payload.notification["title"]||"";var clickaction=payload.notification["click_action"]||payload.fcmOptions.link;if(clickaction)payload.data.url=clickaction;const notificationOptions={body:payload.notification["body"]||"",icon:payload.notification["icon"],click_action:clickaction,data:payload.data};if(!("Notification"in window)){if(_tpush.verbose)console.log("This browser does not support system notifications")}else if(Notification.permission==="granted"){try{var notification=new Notification(notificationTitle,notificationOptions);_tpush.sendMetric(payload.data,"notif");notification.onclick=function(event){event.preventDefault();if(notificationOptions.click_action)window.open(notificationOptions.click_action,"_blank");notification.close();_tpush.sendMetric(payload.data,"open")}}catch(ex){if(_tpush.verbose)console.log("No inline notif!, try by service");_tpush.registration.showNotification(notificationTitle,notificationOptions)}}})};if(typeof Window=="function"){console.log("Tpush v"+_tpush.version);_tpush["swpath"]=_tpush["swpath"]||"/";if(_tpush["app"]&&_tpush["app"].length){_tpush["color.normal"]=_tpush["color.normal"]||"#1cace1";_tpush["color.highlight"]=_tpush["color.highlight"]||"#64ba3b";_tpush["color.background"]=_tpush["color.background"]||"#fff";_tpush["label.ask"]=_tpush["label.ask"]||"&#191;Deseas recibir notificaciones?";_tpush["label.no"]=_tpush["label.no"]||"No por ahora";_tpush["label.yes"]=_tpush["label.yes"]||"S&iacute;";_tpush["dialog.footer.color.background"]=_tpush["dialog.footer.color.background"]||"#efefef";_tpush["dialog.header.color.background"]=_tpush["dialog.header.color.background"]||"#fff";_tpush["label.ask.font"]=_tpush["label.ask.font"]||"Arial";_tpush["label.ask.color"]=_tpush["label.ask.color"]||"black";_tpush["label.yes.font"]=_tpush["label.yes.font"]||"Arial";_tpush["label.yes.color"]=_tpush["label.yes.color"]||_tpush["color.background"];_tpush["button.yes.color.hover"]=_tpush["button.yes.color.hover"]||"";_tpush["button.no.color.hover"]=_tpush["button.no.color.hover"]||"";_tpush["label.no.font"]=_tpush["label.no.font"]||"Arial";_tpush["label.no.color"]=_tpush["label.no.color"]||_tpush["color.normal"];_tpush["button.no.color.background"]=_tpush["button.no.color.background"]||_tpush["color.background"];_tpush["icon.align.horizontal"]=_tpush["icon.align.horizontal"]||"right";_tpush["icon.margin.horizontal"]=_tpush["icon.margin.horizontal"]||"1em";_tpush["icon.align.vertical"]=_tpush["icon.align.vertical"]||"bottom";_tpush["icon.margin.vertical"]=_tpush["icon.margin.vertical"]||"1em";_tpush["style"]=_tpush["style"]||"default";_tpush.attachStyles();window.addEventListener("load",_tpush.init,false)}}else if(typeof ServiceWorkerGlobalScope=="function"){var values=_tpush.parseQuery(self.location.search);_tpush.app=values["app"]||"";if(_tpush.verbose)console.log("_tpush.app: "+_tpush.app);_tpush.registration=self.registration;console.log("Tpush worker v"+_tpush.version+" ServiceWorker v"+_tpush.worker_version);if(_tpush.verbose)console.log(typeof ServiceWorkerGlobalScope);firebase.initializeApp(config);self.addEventListener("activate",function(evt){if(_tpush.verbose)console.log("Activated Tpush v"+_tpush.version+" ServiceWorker v"+_tpush.worker_version);console.dir(self)});self.addEventListener("install",function(evt){evt.waitUntil(self.skipWaiting())});const _tpush_messaging=firebase.messaging();_tpush_messaging.setBackgroundMessageHandler(function(payload){if(_tpush.verbose)console.log("[tpush-sw.js] Received background message ",payload);if(!payload["data"])return;_tpush.sendMetric(payload.data,"receive");_tpush.sendMetric(payload.data,"notif");const notificationTitle=payload.data["ti"]||"";const notificationOptions={body:payload.data["bd"]||"",icon:"https://wstpush-mobile.terra.com/public/icon/"+_tpush.app,data:payload.data};return self.registration.showNotification(notificationTitle,notificationOptions)});self.addEventListener("notificationclick",function(event){var data=event.notification.data;if(_tpush.verbose)console.log("[tpush-sw.js] notificationclick ",event.notification);event.preventDefault();_tpush.sendMetric(event.notification.data,"open");if(event.notification["data"]&&(event.notification.data["ac"]||event.notification.data["url"])){event.waitUntil(self.clients.openWindow(event.notification.data["ac"]||event.notification.data["url"]))}event.notification.close()})}_tpush.testNotification=data=>{if(!self["window"]||!("Notification"in window))return;if(Notification.permission==="granted"){const notificationTitle=data&&data["ti"]?data["ti"]:"Notification title";const notificationOptions={body:data&&data["bd"]?data["bd"]:"Test notification for web",icon:data&&data["icon"]?data["icon"]:"https://wstpush-mobile.terra.com/public/icon/"+_tpush.app,image:data&&data["im"]?data["im"]:"https://wstpush-mobile.terra.com/public/icon/"+_tpush.app};_data=data;_tpush.registration.showNotification(notificationTitle,notificationOptions)}else alert("No permissions")};_tpush.enableNotifChangeStyle=()=>{switch(_tpush["style"]){case"default":document.querySelector("#tpush-bell").style.background=_tpush["color.normal"];break;case"style2":document.querySelector("#tpush-banner-animation").style.display="none";break}};_tpush.disableNotifChangeStyle=()=>{switch(_tpush["style"]){case"default":break;case"style2":document.querySelector("#tpush-banner-animation").style.display="none";document.querySelector("#tpush-bell-disable").style.display="block";break}};_tpush.disableNotifChangeFunction=()=>{switch(_tpush["style"]){case"style2":if(_tpush["styleCustom"]&&_tpush["styleCustom"]["style2"]&&_tpush["styleCustom"]["style2"]["disableFunction"]){_tpush.bell.removeEventListener("click",_tpush.bellClickStyle2);if(_tpush["styleCustom"]&&_tpush["styleCustom"]["style2"]&&_tpush["styleCustom"]["style2"]["disableFunctionClick"]){_tpush.bell.addEventListener("click",_tpush["styleCustom"]["style2"]["disableFunctionClick"])}else{_tpush.bell.addEventListener("click",()=>{window.open("https://neo.terra.com/test/tpushweb/git/notificaciones-bloqueadas.html","_blank")})}}if(_tpush["styleCustom"]&&_tpush["styleCustom"]["style2"]&&_tpush["styleCustom"]["style2"]["useDisablePopUp"]&&_tpush["styleCustom"]["style2"]["popup"]&&_tpush["styleCustom"]["style2"]["popup"]["url"]){_tpush.bell.removeEventListener("click",_tpush.bellClickStyle2);document.getElementById("disablePopUpIframe").src=_tpush["styleCustom"]["style2"]["popup"]["url"];_tpush.bell.addEventListener("click",()=>{document.getElementById("disablePopUpCenter").classList.remove("d-none");document.getElementById("centered-div").classList.add("popup-show");document.getElementById("centered-div").classList.remove("popup-hide")});const hidePopUp=()=>{document.getElementById("centered-div").classList.remove("popup-show");document.getElementById("centered-div").classList.add("popup-hide");document.getElementById("centered-div").addEventListener("animationend",function(){if(document.getElementById("centered-div").classList.contains("popup-hide")){document.getElementById("disablePopUpCenter").classList.add("d-none")}},{once:true})};document.getElementById("disablePopUpCrossExit").addEventListener("click",hidePopUp);document.getElementById("disablePopUpCenter").addEventListener("click",hidePopUp)}break}};!function(i,s){"use strict";var e="0.7.14",o="",r="?",n="function",a="undefined",t="object",d="string",l="major",w="model",u="name",c="type",m="vendor",p="version",b="architecture",g="console",f="mobile",h="tablet",v="smarttv",x="wearable",k="embedded",y={extend:function(i,s){var e={};for(var o in i)s[o]&&s[o].length%2===0?e[o]=s[o].concat(i[o]):e[o]=i[o];return e},has:function(i,s){return"string"==typeof i?-1!==s.toLowerCase().indexOf(i.toLowerCase()):!1},lowerize:function(i){return i.toLowerCase()},major:function(i){return typeof i===d?i.replace(/[^\d\.]/g,"").split(".")[0]:s},trim:function(i){return i.replace(/^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g,"")}},T={rgx:function(i,e){for(var o,r,a,d,l,w,u=0;u<e.length&&!l;){var c=e[u],m=e[u+1];for(o=r=0;o<c.length&&!l;)if(l=c[o++].exec(i))for(a=0;a<m.length;a++)w=l[++r],d=m[a],typeof d===t&&d.length>0?2==d.length?typeof d[1]==n?this[d[0]]=d[1].call(this,w):this[d[0]]=d[1]:3==d.length?typeof d[1]!==n||d[1].exec&&d[1].test?this[d[0]]=w?w.replace(d[1],d[2]):s:this[d[0]]=w?d[1].call(this,w,d[2]):s:4==d.length&&(this[d[0]]=w?d[3].call(this,w.replace(d[1],d[2])):s):this[d]=w?w:s;u+=2}},str:function(i,e){for(var o in e)if(typeof e[o]===t&&e[o].length>0){for(var n=0;n<e[o].length;n++)if(y.has(e[o][n],i))return o===r?s:o}else if(y.has(e[o],i))return o===r?s:o;return i}},S={browser:{oldsafari:{version:{"1.0":"/8",1.2:"/1",1.3:"/3","2.0":"/412","2.0.2":"/416","2.0.3":"/417","2.0.4":"/419","?":"/"}}},device:{amazon:{model:{"Fire Phone":["SD","KF"]}},sprint:{model:{"Evo Shift 4G":"7373KT"},vendor:{HTC:"APA",Sprint:"Sprint"}}},os:{windows:{version:{ME:"4.90","NT 3.11":"NT3.51","NT 4.0":"NT4.0",2e3:"NT 5.0",XP:["NT 5.1","NT 5.2"],Vista:"NT 6.0",7:"NT 6.1",8:"NT 6.2",8.1:"NT 6.3",10:["NT 6.4","NT 10.0"],RT:"ARM"}}}},A={browser:[[/(opera\smini)\/([\w\.-]+)/i,/(opera\s[mobiletab]+).+version\/([\w\.-]+)/i,/(opera).+version\/([\w\.]+)/i,/(opera)[\/\s]+([\w\.]+)/i],[u,p],[/(opios)[\/\s]+([\w\.]+)/i],[[u,"Opera Mini"],p],[/\s(opr)\/([\w\.]+)/i],[[u,"Opera"],p],[/(kindle)\/([\w\.]+)/i,/(lunascape|maxthon|netfront|jasmine|blazer)[\/\s]?([\w\.]+)*/i,/(avant\s|iemobile|slim|baidu)(?:browser)?[\/\s]?([\w\.]*)/i,/(?:ms|\()(ie)\s([\w\.]+)/i,/(rekonq)\/([\w\.]+)*/i,/(chromium|flock|rockmelt|midori|epiphany|silk|skyfire|ovibrowser|bolt|iron|vivaldi|iridium|phantomjs|bowser)\/([\w\.-]+)/i],[u,p],[/(trident).+rv[:\s]([\w\.]+).+like\sgecko/i],[[u,"IE"],p],[/(edge)\/((\d+)?[\w\.]+)/i],[u,p],[/(yabrowser)\/([\w\.]+)/i],[[u,"Yandex"],p],[/(puffin)\/([\w\.]+)/i],[[u,"Puffin"],p],[/((?:[\s\/])uc?\s?browser|(?:juc.+)ucweb)[\/\s]?([\w\.]+)/i],[[u,"UCBrowser"],p],[/(comodo_dragon)\/([\w\.]+)/i],[[u,/_/g," "],p],[/(micromessenger)\/([\w\.]+)/i],[[u,"WeChat"],p],[/(QQ)\/([\d\.]+)/i],[u,p],[/m?(qqbrowser)[\/\s]?([\w\.]+)/i],[u,p],[/xiaomi\/miuibrowser\/([\w\.]+)/i],[p,[u,"MIUI Browser"]],[/;fbav\/([\w\.]+);/i],[p,[u,"Facebook"]],[/(headlesschrome) ([\w\.]+)/i],[p,[u,"Chrome Headless"]],[/\swv\).+(chrome)\/([\w\.]+)/i],[[u,/(.+)/,"$1 WebView"],p],[/((?:oculus|samsung)browser)\/([\w\.]+)/i],[[u,/(.+(?:g|us))(.+)/,"$1 $2"],p],[/android.+version\/([\w\.]+)\s+(?:mobile\s?safari|safari)*/i],[p,[u,"Android Browser"]],[/(chrome|omniweb|arora|[tizenoka]{5}\s?browser)\/v?([\w\.]+)/i],[u,p],[/(dolfin)\/([\w\.]+)/i],[[u,"Dolphin"],p],[/((?:android.+)crmo|crios)\/([\w\.]+)/i],[[u,"Chrome"],p],[/(coast)\/([\w\.]+)/i],[[u,"Opera Coast"],p],[/fxios\/([\w\.-]+)/i],[p,[u,"Firefox"]],[/version\/([\w\.]+).+?mobile\/\w+\s(safari)/i],[p,[u,"Mobile Safari"]],[/version\/([\w\.]+).+?(mobile\s?safari|safari)/i],[p,u],[/webkit.+?(mobile\s?safari|safari)(\/[\w\.]+)/i],[u,[p,T.str,S.browser.oldsafari.version]],[/(konqueror)\/([\w\.]+)/i,/(webkit|khtml)\/([\w\.]+)/i],[u,p],[/(navigator|netscape)\/([\w\.-]+)/i],[[u,"Netscape"],p],[/(swiftfox)/i,/(icedragon|iceweasel|camino|chimera|fennec|maemo\sbrowser|minimo|conkeror)[\/\s]?([\w\.\+]+)/i,/(firefox|seamonkey|k-meleon|icecat|iceape|firebird|phoenix)\/([\w\.-]+)/i,/(mozilla)\/([\w\.]+).+rv\:.+gecko\/\d+/i,/(polaris|lynx|dillo|icab|doris|amaya|w3m|netsurf|sleipnir)[\/\s]?([\w\.]+)/i,/(links)\s\(([\w\.]+)/i,/(gobrowser)\/?([\w\.]+)*/i,/(ice\s?browser)\/v?([\w\._]+)/i,/(mosaic)[\/\s]([\w\.]+)/i],[u,p]],cpu:[[/(?:(amd|x(?:(?:86|64)[_-])?|wow|win)64)[;\)]/i],[[b,"amd64"]],[/(ia32(?=;))/i],[[b,y.lowerize]],[/((?:i[346]|x)86)[;\)]/i],[[b,"ia32"]],[/windows\s(ce|mobile);\sppc;/i],[[b,"arm"]],[/((?:ppc|powerpc)(?:64)?)(?:\smac|;|\))/i],[[b,/ower/,"",y.lowerize]],[/(sun4\w)[;\)]/i],[[b,"sparc"]],[/((?:avr32|ia64(?=;))|68k(?=\))|arm(?:64|(?=v\d+;))|(?=atmel\s)avr|(?:irix|mips|sparc)(?:64)?(?=;)|pa-risc)/i],[[b,y.lowerize]]],device:[[/\((ipad|playbook);[\w\s\);-]+(rim|apple)/i],[w,m,[c,h]],[/applecoremedia\/[\w\.]+ \((ipad)/],[w,[m,"Apple"],[c,h]],[/(apple\s{0,1}tv)/i],[[w,"Apple TV"],[m,"Apple"]],[/(archos)\s(gamepad2?)/i,/(hp).+(touchpad)/i,/(hp).+(tablet)/i,/(kindle)\/([\w\.]+)/i,/\s(nook)[\w\s]+build\/(\w+)/i,/(dell)\s(strea[kpr\s\d]*[\dko])/i],[m,w,[c,h]],[/(kf[A-z]+)\sbuild\/[\w\.]+.*silk\//i],[w,[m,"Amazon"],[c,h]],[/(sd|kf)[0349hijorstuw]+\sbuild\/[\w\.]+.*silk\//i],[[w,T.str,S.device.amazon.model],[m,"Amazon"],[c,f]],[/\((ip[honed|\s\w*]+);.+(apple)/i],[w,m,[c,f]],[/\((ip[honed|\s\w*]+);/i],[w,[m,"Apple"],[c,f]],[/(blackberry)[\s-]?(\w+)/i,/(blackberry|benq|palm(?=\-)|sonyericsson|acer|asus|dell|meizu|motorola|polytron)[\s_-]?([\w-]+)*/i,/(hp)\s([\w\s]+\w)/i,/(asus)-?(\w+)/i],[m,w,[c,f]],[/\(bb10;\s(\w+)/i],[w,[m,"BlackBerry"],[c,f]],[/android.+(transfo[prime\s]{4,10}\s\w+|eeepc|slider\s\w+|nexus 7|padfone)/i],[w,[m,"Asus"],[c,h]],[/(sony)\s(tablet\s[ps])\sbuild\//i,/(sony)?(?:sgp.+)\sbuild\//i],[[m,"Sony"],[w,"Xperia Tablet"],[c,h]],[/android.+\s([c-g]\d{4}|so[-l]\w+)\sbuild\//i],[w,[m,"Sony"],[c,f]],[/\s(ouya)\s/i,/(nintendo)\s([wids3u]+)/i],[m,w,[c,g]],[/android.+;\s(shield)\sbuild/i],[w,[m,"Nvidia"],[c,g]],[/(playstation\s[34portablevi]+)/i],[w,[m,"Sony"],[c,g]],[/(sprint\s(\w+))/i],[[m,T.str,S.device.sprint.vendor],[w,T.str,S.device.sprint.model],[c,f]],[/(lenovo)\s?(S(?:5000|6000)+(?:[-][\w+]))/i],[m,w,[c,h]],[/(htc)[;_\s-]+([\w\s]+(?=\))|\w+)*/i,/(zte)-(\w+)*/i,/(alcatel|geeksphone|lenovo|nexian|panasonic|(?=;\s)sony)[_\s-]?([\w-]+)*/i],[m,[w,/_/g," "],[c,f]],[/(nexus\s9)/i],[w,[m,"HTC"],[c,h]],[/d\/huawei([\w\s-]+)[;\)]/i,/(nexus\s6p)/i],[w,[m,"Huawei"],[c,f]],[/(microsoft);\s(lumia[\s\w]+)/i],[m,w,[c,f]],[/[\s\(;](xbox(?:\sone)?)[\s\);]/i],[w,[m,"Microsoft"],[c,g]],[/(kin\.[onetw]{3})/i],[[w,/\./g," "],[m,"Microsoft"],[c,f]],[/\s(milestone|droid(?:[2-4x]|\s(?:bionic|x2|pro|razr))?(:?\s4g)?)[\w\s]+build\//i,/mot[\s-]?(\w+)*/i,/(XT\d{3,4}) build\//i,/(nexus\s6)/i],[w,[m,"Motorola"],[c,f]],[/android.+\s(mz60\d|xoom[\s2]{0,2})\sbuild\//i],[w,[m,"Motorola"],[c,h]],[/hbbtv\/\d+\.\d+\.\d+\s+\([\w\s]*;\s*(\w[^;]*);([^;]*)/i],[[m,y.trim],[w,y.trim],[c,v]],[/hbbtv.+maple;(\d+)/i],[[w,/^/,"SmartTV"],[m,"Samsung"],[c,v]],[/\(dtv[\);].+(aquos)/i],[w,[m,"Sharp"],[c,v]],[/android.+((sch-i[89]0\d|shw-m380s|gt-p\d{4}|gt-n\d+|sgh-t8[56]9|nexus 10))/i,/((SM-T\w+))/i],[[m,"Samsung"],w,[c,h]],[/smart-tv.+(samsung)/i],[m,[c,v],w],[/((s[cgp]h-\w+|gt-\w+|galaxy\snexus|sm-\w[\w\d]+))/i,/(sam[sung]*)[\s-]*(\w+-?[\w-]*)*/i,/sec-((sgh\w+))/i],[[m,"Samsung"],w,[c,f]],[/sie-(\w+)*/i],[w,[m,"Siemens"],[c,f]],[/(maemo|nokia).*(n900|lumia\s\d+)/i,/(nokia)[\s_-]?([\w-]+)*/i],[[m,"Nokia"],w,[c,f]],[/android\s3\.[\s\w;-]{10}(a\d{3})/i],[w,[m,"Acer"],[c,h]],[/android.+([vl]k\-?\d{3})\s+build/i],[w,[m,"LG"],[c,h]],[/android\s3\.[\s\w;-]{10}(lg?)-([06cv9]{3,4})/i],[[m,"LG"],w,[c,h]],[/(lg) netcast\.tv/i],[m,w,[c,v]],[/(nexus\s[45])/i,/lg[e;\s\/-]+(\w+)*/i,/android.+lg(\-?[\d\w]+)\s+build/i],[w,[m,"LG"],[c,f]],[/android.+(ideatab[a-z0-9\-\s]+)/i],[w,[m,"Lenovo"],[c,h]],[/linux;.+((jolla));/i],[m,w,[c,f]],[/((pebble))app\/[\d\.]+\s/i],[m,w,[c,x]],[/android.+;\s(oppo)\s?([\w\s]+)\sbuild/i],[m,w,[c,f]],[/crkey/i],[[w,"Chromecast"],[m,"Google"]],[/android.+;\s(glass)\s\d/i],[w,[m,"Google"],[c,x]],[/android.+;\s(pixel c)\s/i],[w,[m,"Google"],[c,h]],[/android.+;\s(pixel xl|pixel)\s/i],[w,[m,"Google"],[c,f]],[/android.+(\w+)\s+build\/hm\1/i,/android.+(hm[\s\-_]*note?[\s_]*(?:\d\w)?)\s+build/i,/android.+(mi[\s\-_]*(?:one|one[\s_]plus|note lte)?[\s_]*(?:\d\w)?)\s+build/i],[[w,/_/g," "],[m,"Xiaomi"],[c,f]],[/android.+;\s(m[1-5]\snote)\sbuild/i],[w,[m,"Meizu"],[c,h]],[/android.+a000(1)\s+build/i],[w,[m,"OnePlus"],[c,f]],[/android.+[;\/]\s*(RCT[\d\w]+)\s+build/i],[w,[m,"RCA"],[c,h]],[/android.+[;\/]\s*(Venue[\d\s]*)\s+build/i],[w,[m,"Dell"],[c,h]],[/android.+[;\/]\s*(Q[T|M][\d\w]+)\s+build/i],[w,[m,"Verizon"],[c,h]],[/android.+[;\/]\s+(Barnes[&\s]+Noble\s+|BN[RT])(V?.*)\s+build/i],[[m,"Barnes & Noble"],w,[c,h]],[/android.+[;\/]\s+(TM\d{3}.*\b)\s+build/i],[w,[m,"NuVision"],[c,h]],[/android.+[;\/]\s*(zte)?.+(k\d{2})\s+build/i],[[m,"ZTE"],w,[c,h]],[/android.+[;\/]\s*(gen\d{3})\s+build.*49h/i],[w,[m,"Swiss"],[c,f]],[/android.+[;\/]\s*(zur\d{3})\s+build/i],[w,[m,"Swiss"],[c,h]],[/android.+[;\/]\s*((Zeki)?TB.*\b)\s+build/i],[w,[m,"Zeki"],[c,h]],[/(android).+[;\/]\s+([YR]\d{2}x?.*)\s+build/i,/android.+[;\/]\s+(Dragon[\-\s]+Touch\s+|DT)(.+)\s+build/i],[[m,"Dragon Touch"],w,[c,h]],[/android.+[;\/]\s*(NS-?.+)\s+build/i],[w,[m,"Insignia"],[c,h]],[/android.+[;\/]\s*((NX|Next)-?.+)\s+build/i],[w,[m,"NextBook"],[c,h]],[/android.+[;\/]\s*(Xtreme\_?)?(V(1[045]|2[015]|30|40|60|7[05]|90))\s+build/i],[[m,"Voice"],w,[c,f]],[/android.+[;\/]\s*(LVTEL\-?)?(V1[12])\s+build/i],[[m,"LvTel"],w,[c,f]],[/android.+[;\/]\s*(V(100MD|700NA|7011|917G).*\b)\s+build/i],[w,[m,"Envizen"],[c,h]],[/android.+[;\/]\s*(Le[\s\-]+Pan)[\s\-]+(.*\b)\s+build/i],[m,w,[c,h]],[/android.+[;\/]\s*(Trio[\s\-]*.*)\s+build/i],[w,[m,"MachSpeed"],[c,h]],[/android.+[;\/]\s*(Trinity)[\-\s]*(T\d{3})\s+build/i],[m,w,[c,h]],[/android.+[;\/]\s*TU_(1491)\s+build/i],[w,[m,"Rotor"],[c,h]],[/android.+(KS(.+))\s+build/i],[w,[m,"Amazon"],[c,h]],[/android.+(Gigaset)[\s\-]+(Q.+)\s+build/i],[m,w,[c,h]],[/\s(tablet|tab)[;\/]/i,/\s(mobile)(?:[;\/]|\ssafari)/i],[[c,y.lowerize],m,w],[/(android.+)[;\/].+build/i],[w,[m,"Generic"]]],engine:[[/windows.+\sedge\/([\w\.]+)/i],[p,[u,"EdgeHTML"]],[/(presto)\/([\w\.]+)/i,/(webkit|trident|netfront|netsurf|amaya|lynx|w3m)\/([\w\.]+)/i,/(khtml|tasman|links)[\/\s]\(?([\w\.]+)/i,/(icab)[\/\s]([23]\.[\d\.]+)/i],[u,p],[/rv\:([\w\.]+).*(gecko)/i],[p,u]],os:[[/microsoft\s(windows)\s(vista|xp)/i],[u,p],[/(windows)\snt\s6\.2;\s(arm)/i,/(windows\sphone(?:\sos)*)[\s\/]?([\d\.\s]+\w)*/i,/(windows\smobile|windows)[\s\/]?([ntce\d\.\s]+\w)/i],[u,[p,T.str,S.os.windows.version]],[/(win(?=3|9|n)|win\s9x\s)([nt\d\.]+)/i],[[u,"Windows"],[p,T.str,S.os.windows.version]],[/\((bb)(10);/i],[[u,"BlackBerry"],p],[/(blackberry)\w*\/?([\w\.]+)*/i,/(tizen)[\/\s]([\w\.]+)/i,/(android|webos|palm\sos|qnx|bada|rim\stablet\sos|meego|contiki)[\/\s-]?([\w\.]+)*/i,/linux;.+(sailfish);/i],[u,p],[/(symbian\s?os|symbos|s60(?=;))[\/\s-]?([\w\.]+)*/i],[[u,"Symbian"],p],[/\((series40);/i],[u],[/mozilla.+\(mobile;.+gecko.+firefox/i],[[u,"Firefox OS"],p],[/(nintendo|playstation)\s([wids34portablevu]+)/i,/(mint)[\/\s\(]?(\w+)*/i,/(mageia|vectorlinux)[;\s]/i,/(joli|[kxln]?ubuntu|debian|[open]*suse|gentoo|(?=\s)arch|slackware|fedora|mandriva|centos|pclinuxos|redhat|zenwalk|linpus)[\/\s-]?(?!chrom)([\w\.-]+)*/i,/(hurd|linux)\s?([\w\.]+)*/i,/(gnu)\s?([\w\.]+)*/i],[u,p],[/(cros)\s[\w]+\s([\w\.]+\w)/i],[[u,"Chromium OS"],p],[/(sunos)\s?([\w\.]+\d)*/i],[[u,"Solaris"],p],[/\s([frentopc-]{0,4}bsd|dragonfly)\s?([\w\.]+)*/i],[u,p],[/(haiku)\s(\w+)/i],[u,p],[/cfnetwork\/.+darwin/i,/ip[honead]+(?:.*os\s([\w]+)*\slike\smac|;\sopera)/i],[[p,/_/g,"."],[u,"iOS"]],[/(mac\sos\sx)\s?([\w\s\.]+\w)*/i,/(macintosh|mac(?=_powerpc)\s)/i],[[u,"Mac OS"],[p,/_/g,"."]],[/((?:open)?solaris)[\/\s-]?([\w\.]+)*/i,/(aix)\s((\d)(?=\.|\)|\s)[\w\.]*)*/i,/(plan\s9|minix|beos|os\/2|amigaos|morphos|risc\sos|openvms)/i,/(unix)\s?([\w\.]+)*/i],[u,p]]},E=function(i,s){this[u]=i,this[p]=s},N=function(i){this[b]=i},z=function(i,s,e){this[m]=i,this[w]=s,this[c]=e},M=E,O=E,R=function(e,r){if("object"==typeof e&&(r=e,e=s),!(this instanceof R))return new R(e,r).getResult();var n=e||(i&&i.navigator&&i.navigator.userAgent?i.navigator.userAgent:o),a=r?y.extend(A,r):A,t=new E,d=new N,l=new z,w=new M,u=new O;return this.getBrowser=function(){return T.rgx.call(t,n,a.browser),t.major=y.major(t.version),t},this.getCPU=function(){return T.rgx.call(d,n,a.cpu),d},this.getDevice=function(){return T.rgx.call(l,n,a.device),l},this.getEngine=function(){return T.rgx.call(w,n,a.engine),w},this.getOS=function(){return T.rgx.call(u,n,a.os),u},this.getResult=function(){return{ua:this.getUA(),browser:this.getBrowser(),engine:this.getEngine(),os:this.getOS(),device:this.getDevice(),cpu:this.getCPU()}},this.getUA=function(){return n},this.setUA=function(i){return n=i,t=new E,d=new N,l=new z,w=new M,u=new O,this},this};R.VERSION=e,R.BROWSER={NAME:u,MAJOR:l,VERSION:p},R.CPU={ARCHITECTURE:b},R.DEVICE={MODEL:w,VENDOR:m,TYPE:c,CONSOLE:g,MOBILE:f,SMARTTV:v,TABLET:h,WEARABLE:x,EMBEDDED:k},R.ENGINE={NAME:u,VERSION:p},R.OS={NAME:u,VERSION:p},typeof exports!==a?(typeof module!==a&&module.exports&&(exports=module.exports=R),exports.UAParser=R):typeof define===n&&define.amd?define(function(){return R}):i&&(i.UAParser=R);var C=i&&(i.jQuery||i.Zepto);if(typeof C!==a){var V=new R;C.ua=V.getResult(),C.ua.get=function(){return V.getUA()},C.ua.set=function(i){V.setUA(i);var s=V.getResult();for(var e in s)C.ua[e]=s[e]}}}("object"==typeof window?window:this);if(self["window"]){!function(e,t){"use strict";"function"==typeof define&&define.amd?define([],t):"object"==typeof module&&module.exports?module.exports=t():e.picoModal=t()}(this,function(){"use strict";function e(e){return"object"==typeof Node?e instanceof Node:e&&"object"==typeof e&&"number"==typeof e.nodeType}function t(e){return"string"==typeof e}function n(){var e=[];return{watch:e.push.bind(e),trigger:function(t,n){for(var o=!0,i={detail:n,preventDefault:function(){o=!1}},r=0;r<e.length;r++)e[r](t,i);return o}}}function o(e){return"none"===window.getComputedStyle(e).display}function i(e){this.elem=e}function r(e,t){return i.make(e("parent")).clazz("pico-overlay").clazz(e("overlayClass","")).stylize({display:"none",position:"fixed",top:"0px",left:"0px",height:"100%",width:"100%",zIndex:1e4}).stylize(e("overlayStyles",{opacity:.5,background:"#000"})).onClick(function(){e("overlayClose",!0)&&t()})}function l(e,t){var n=e("width","auto");"number"==typeof n&&(n=""+n+"px");var o=e("modalId","pico-"+f++),r=i.make(e("parent")).clazz("pico-content").clazz(e("modalClass","")).stylize({display:"none",position:"fixed",zIndex:10001,left:"50%",top:"38.1966%",maxHeight:"90%",boxSizing:"border-box",width:n,"-ms-transform":"translate(-50%,-38.1966%)","-moz-transform":"translate(-50%,-38.1966%)","-webkit-transform":"translate(-50%,-38.1966%)","-o-transform":"translate(-50%,-38.1966%)",transform:"translate(-50%,-38.1966%)","line-height":"1.0"}).stylize(e("modalStyles",{overflow:"auto",backgroundColor:"white",padding:"20px",borderRadius:"5px"})).html(e("content")).attr("id",o).attr("role","dialog").attr("aria-labelledby",e("ariaLabelledBy")).attr("aria-describedby",e("ariaDescribedBy",o)).onClick(function(e){var n=new i(e.target).anyAncestor(function(e){return/\bpico-close\b/.test(e.elem.className)});n&&t()});return r}function a(e,t){return t("closeButton",!0)?e.child("button").html(t("closeHtml","&#xD7;")).clazz("pico-close").clazz(t("closeClass","")).stylize(t("closeStyles",{borderRadius:"2px",border:0,padding:0,cursor:"pointer",height:"15px",width:"15px",position:"absolute",top:"5px",right:"5px",fontSize:"16px",textAlign:"center",lineHeight:"15px",background:"#CCC"})).attr("aria-label",t("close-label","Close")):void 0}function c(e){return function(){return e().elem}}function s(e,t){function n(e,t){var n=e.msMatchesSelector||e.webkitMatchesSelector||e.matches;return n.call(e,t)}function i(e){return o(e)||n(e,":disabled")||e.hasAttribute("contenteditable")?!1:e.hasAttribute("tabindex")||n(e,"input,select,textarea,button,a[href],area[href],iframe")}function r(e){for(var t=e.getElementsByTagName("*"),n=0;n<t.length;n++)if(i(t[n]))return t[n]}function l(e){for(var t=e.getElementsByTagName("*"),n=t.length;n--;)if(i(t[n]))return t[n]}var a;e.beforeShow(function(){a=document.activeElement}),e.afterShow(function(){if(t()){var n=r(e.modalElem());n&&n.focus()}}),e.afterClose(function(){t()&&a&&a.focus(),a=null}),h.watch(function(n){if(t()&&e.isVisible()){var o=r(e.modalElem()),i=l(e.modalElem()),a=n.shiftKey?o:i;a===document.activeElement&&((n.shiftKey?i:o).focus(),n.preventDefault())}})}function u(e,t){var n,o=new i(document.body);e.beforeShow(function(){n=o.elem.style.overflow,t()&&o.stylize({overflow:"hidden"})}),e.afterClose(function(){o.stylize({overflow:n})})}i.make=function(e,t){"string"==typeof e&&(e=document.querySelector(e));var n=document.createElement(t||"div");return(e||document.body).appendChild(n),new i(n)},i.prototype={child:function(e){return i.make(this.elem,e)},stylize:function(e){e=e||{},"undefined"!=typeof e.opacity&&(e.filter="alpha(opacity="+100*e.opacity+")");for(var t in e)e.hasOwnProperty(t)&&(this.elem.style[t]=e[t]);return this},clazz:function(e){return this.elem.className+=" "+e,this},html:function(t){return e(t)?this.elem.appendChild(t):this.elem.innerHTML=t,this},onClick:function(e){return this.elem.addEventListener("click",e),this},destroy:function(){this.elem.parentNode.removeChild(this.elem)},hide:function(){this.elem.style.display="none"},show:function(){this.elem.style.display="block"},attr:function(e,t){return void 0!==t&&this.elem.setAttribute(e,t),this},anyAncestor:function(e){for(var t=this.elem;t;){if(e(new i(t)))return!0;t=t.parentNode}return!1},isVisible:function(){return!o(this.elem)}};var f=1,d=n(),h=n();return document.documentElement.addEventListener("keydown",function(e){var t=e.which||e.keyCode;27===t?d.trigger():9===t&&h.trigger(e)}),function(o){function i(e,t){var n=o[e];return"function"==typeof n&&(n=n(t)),void 0===n?t:n}function f(e){k().hide(),C().hide(),x.trigger(y,e)}function h(e){z.trigger(y,e)&&f(e)}function m(e){return function(){return e.apply(this,arguments),y}}function p(e,t){if(!b){var n=l(i,h);b={modal:n,overlay:r(i,h),close:a(n,i)},v.trigger(y,t)}return b[e]}(t(o)||e(o))&&(o={content:o});var y,b,v=n(),w=n(),g=n(),z=n(),x=n(),C=p.bind(window,"modal"),k=p.bind(window,"overlay"),E=p.bind(window,"close");return y={modalElem:c(C),closeElem:c(E),overlayElem:c(k),buildDom:m(p.bind(null,null)),isVisible:function(){return!!(b&&C&&C().isVisible())},show:function(e){return w.trigger(y,e)&&(k().show(),E(),C().show(),g.trigger(y,e)),this},close:m(h),forceClose:m(f),destroy:function(){C().destroy(),k().destroy(),k=C=E=void 0},options:function(e){Object.keys(e).map(function(t){o[t]=e[t]})},afterCreate:m(v.watch),beforeShow:m(w.watch),afterShow:m(g.watch),beforeClose:m(z.watch),afterClose:m(x.watch)},s(y,i.bind(null,"focus",!0)),u(y,i.bind(null,"bodyOverflow",!0)),d.watch(function(){i("escCloses",!0)&&y.isVisible()&&y.close()}),y}})}
